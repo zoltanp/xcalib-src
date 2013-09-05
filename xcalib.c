@@ -275,6 +275,59 @@ static const struct xvidmode_functions_t setup_functions = {
 #if defined(XRANDR)
 /* X RandR setup on unix */
 
+#include "gamma_randr.h"
+
+struct xrandr_data_t {
+  randr_state_t state;
+};
+
+struct xrandr_functions_t {
+  int (*reset)(struct xrandr_data_t * data,
+      const char *displayname,
+      int screen,
+      int controller_unused);
+  int (*init)(struct xrandr_data_t *data, int donothing, int alter, int clear,
+      unsigned int *ramp_size_ptr, char *in_name);
+  int (*get_gamma_ramp)(struct xrandr_data_t *data,
+          unsigned int ramp_size,
+          uint16_t * r_ramp,
+          uint16_t * g_ramp,
+          uint16_t * b_ramp);
+  int (*apply)(struct xrandr_data_t *data,
+       unsigned int ramp_size,
+       uint16_t * r_ramp,
+       uint16_t * g_ramp,
+       uint16_t * b_ramp);
+  int (*close)(struct xrandr_data_t *);
+};
+
+int xrandr_reset(struct xrandr_data_t* data,
+      const char *displayname,
+      int screen,
+      int controller_unused);
+int xrandr_init(struct xrandr_data_t *data, int donothing, int alter, int clear, 
+      unsigned int *ramp_size_ptr, char *in_name);
+int xrandr_get_gamma_ramp(struct xrandr_data_t *data,
+          unsigned int ramp_size,
+          uint16_t * r_ramp,
+          uint16_t * g_ramp,
+          uint16_t * b_ramp);
+int xrandr_apply(struct xrandr_data_t *data,
+       unsigned int ramp_size,
+       uint16_t * r_ramp,
+       uint16_t * g_ramp,
+       uint16_t * b_ramp);
+int xrandr_close(struct xrandr_data_t *data);
+
+static const struct xrandr_functions_t setup_functions = {
+  xrandr_reset,
+  xrandr_init,
+  xrandr_get_gamma_ramp,
+  xrandr_apply,
+  xrandr_close
+};
+
+
 #endif
 
 /* prototypes */
@@ -1531,6 +1584,94 @@ int win32gdi_close(struct win32gdi_data_t *data)
 
 #if defined(XRANDR)
   /* X RandR setup on unix */
+
+int xrandr_reset(struct xrandr_data_t* data,
+      const char *displayname_unused,
+      int screen,
+      int controller_unused)
+{
+  (void)displayname_unused;
+  (void)controller_unused;
+  /* TODO to set the X11 display for randr, the gamma_randr.c file has to be modified */
+  data->state.preferred_screen = screen;
+  /* TODO as controller, the preferred CRTC in randr could be used
+    to allow per-CRTC calibration */
+  data->state.crtc_num = -1;
+
+  return 0;
+}
+
+int xrandr_init(struct xrandr_data_t *data, int donothing, int alter, int clear, 
+      unsigned int *ramp_size_ptr, char *in_name_unused)
+{
+  (void)donothing;   // TODO "donothing" parameter not taken into account
+  (void)alter;
+  (void)clear;  // TODO "clear" parameter not taken into account
+  (void)in_name_unused;
+
+  if(randr_init(&(data->state)))
+    return -1;
+  if(randr_start(&(data->state)))
+    return -2;
+  if(data->state.crtc_count == 0){
+    warning("No CRTCs on screen");
+    return -3;
+  }
+  *ramp_size_ptr = data->state.crtcs[0].ramp_size;
+  return 0;
+}
+
+int xrandr_get_gamma_ramp(struct xrandr_data_t *data,
+          unsigned int ramp_size,
+          uint16_t * r_ramp,
+          uint16_t * g_ramp,
+          uint16_t * b_ramp)
+{
+  if(data->state.crtc_count < 1)
+  {
+    warning("No CRTCs on screen, cannot get gamma");
+    return -1;
+  }
+
+  int crtc_num = data->state.crtc_num;
+  if(crtc_num < 0)
+  {
+    crtc_num = 0; /* if all CRTCs are selected */
+  }
+  unsigned int saved_ramp_size = data->state.crtcs[crtc_num].ramp_size;
+  uint16_t *gamma_r = &data->state.crtcs[crtc_num].saved_ramps[0*saved_ramp_size];
+  uint16_t *gamma_g = &data->state.crtcs[crtc_num].saved_ramps[1*saved_ramp_size];
+  uint16_t *gamma_b = &data->state.crtcs[crtc_num].saved_ramps[2*saved_ramp_size];
+
+  if(saved_ramp_size != ramp_size)
+  {
+    warning("Screen's ramp size is different from the saved ramp size!");
+  }
+
+  unsigned int i;
+  for(i = 0; i < ramp_size; i++){
+    r_ramp[i] = gamma_r[i];
+    g_ramp[i] = gamma_g[i];
+    b_ramp[i] = gamma_b[i];
+  }
+
+  return 0;
+}
+
+int xrandr_apply(struct xrandr_data_t *data,
+       unsigned int ramp_size,
+       uint16_t * r_ramp,
+       uint16_t * g_ramp,
+       uint16_t * b_ramp)
+{
+  return randr_set_gamma(&(data->state), ramp_size, r_ramp, g_ramp, b_ramp);
+}
+
+int xrandr_close(struct xrandr_data_t *data)
+{
+  randr_free(&(data->state));
+  return 0;
+}
 
 
 #endif
