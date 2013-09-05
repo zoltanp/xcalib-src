@@ -1,0 +1,10 @@
+xcalib
+kdev4
+*.o
+*.exe
+*.kdev4
+*.res
+*.so
+*~
+a.out
+xrandr_xcalib
