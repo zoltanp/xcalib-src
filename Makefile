@@ -28,6 +28,10 @@
 #   version for MS-Windows systems with MinGW (internal parser)
 # - fglrx_xcalib
 #   version for ATI's proprietary fglrx driver (internal parser)
+# - xrandr_xcalib
+#   version for usage with the XRandR protocol (internal parser)
+# - vs_xcalib.exe
+#   version for MS-Windows with Visual Studio build (internal parser)
 #
 # - clean
 #   delete all objects and binaries
@@ -36,7 +40,8 @@
 # to change the following variables
 
 XCALIB_VERSION = 0.8
-CFLAGS = -O2
+CFLAGS = -O0 -ggdb
+# CFLAGS += -Wall -Wextra
 XINCLUDEDIR = /usr/X11R6/include
 XLIBDIR = /usr/X11R6/lib
 # for ATI's proprietary driver (must contain the header file fglrx_gamma.h)
@@ -50,16 +55,26 @@ all: xcalib
 # low overhead version (internal parser)
 xcalib: xcalib.c
 	$(CC) $(CFLAGS) -c xcalib.c -I$(XINCLUDEDIR) -DXCALIB_VERSION=\"$(XCALIB_VERSION)\"
-	$(CC) $(CFLAGS) -L$(XLIBDIR) -lm -o xcalib xcalib.o -lX11 -lXxf86vm -lXext
+	$(CC) $(CFLAGS) -L$(XLIBDIR) -o xcalib xcalib.o -lm -lX11 -lXxf86vm -lXext
 
 fglrx_xcalib: xcalib.c
 	$(CC) $(CFLAGS) -c xcalib.c -I$(XINCLUDEDIR) -DXCALIB_VERSION=\"$(XCALIB_VERSION)\" -I$(FGLRXINCLUDEDIR) -DFGLRX
-	$(CC) $(CFLAGS) -L$(XLIBDIR) -L$(FGLRXLIBDIR) -lm -o xcalib xcalib.o -lX11 -lXxf86vm -lXext -lfglrx_gamma
+	$(CC) $(CFLAGS) -L$(XLIBDIR) -L$(FGLRXLIBDIR) -o xcalib xcalib.o -lfglrx_gamma -lm -lX11 -lXxf86vm -lXext
 
 win_xcalib: xcalib.c
 	$(CC) $(CFLAGS) -c xcalib.c -DXCALIB_VERSION=\"$(XCALIB_VERSION)\" -DWIN32GDI
 	windres.exe resource.rc resource.o
-	$(CC) $(CFLAGS) -mwindows -lm resource.o -o xcalib xcalib.o
+	$(CC) $(CFLAGS) -mwindows resource.o -o xcalib xcalib.o -lm
+
+xrandr_xcalib: xcalib.c gamma_randr.c gamma_randr.h
+	$(CC) $(CFLAGS) -c xcalib.c -DXCALIB_VERSION=\"$(XCALIB_VERSION)\" -DXRANDR
+	$(CC) $(CFLAGS) -c gamma_randr.c -DXCALIB_VERSION=\"$(XCALIB_VERSION)\" -std=c99 -DXRANDR
+	$(CC) $(CFLAGS) -L$(XLIBDIR) -o xrandr_xcalib xcalib.o gamma_randr.o -lm -lxcb-randr
+
+vs_xcalib.exe: xcalib.c
+	$(CC) -c xcalib.c -DXCALIB_VERSION=\"$(XCALIB_VERSION)\" -DWIN32GDI
+	windres.exe resource.rc resource.obj
+	$(CC) xcalib.obj resource.obj Gdi32.lib User32.lib /Fevs_xcalib.exe
 
 install:
 	cp ./xcalib $(DESTDIR)/usr/local/bin/
@@ -68,6 +83,9 @@ install:
 clean:
 	rm -f xcalib.o
 	rm -f resource.o
+	rm -f gamma_randr.o
+	rm -f xrandr_xcalib
 	rm -f xcalib
 	rm -f xcalib.exe
+	rm -f xcalib.exe.so
 
