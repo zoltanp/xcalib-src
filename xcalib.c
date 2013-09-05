@@ -43,9 +43,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
+#include <stdint.h>
 #include <fcntl.h>
 #include <string.h>
 #include <sys/types.h>
+
+
+
 
 /* for X11 VidMode stuff */
 #ifndef WIN32GDI
@@ -78,6 +82,252 @@
 
 #ifdef WIN32GDI
 # define u_int16_t  WORD
+#endif
+
+
+#ifdef WIN32GDI
+/* Windows */
+
+static const int ramp_size_win = 256;
+
+typedef struct _GAMMARAMP {
+  WORD  Red[256];
+  WORD  Green[256];
+  WORD  Blue[256];
+} GAMMARAMP;
+
+struct win32gdi_data_t {
+  char win_default_profile[MAX_PATH+1];
+  DWORD win_profile_len;
+  GAMMARAMP winGammaRamp;
+  HDC hDc;
+  int screen;
+};
+
+struct win32gdi_functions_t {
+  int (*reset)(struct win32gdi_data_t *data,
+      const char *displayname,
+      int screen,
+      int controller_unused);
+  int (*init)(struct win32gdi_data_t *, int donothing, int alter, int clear,
+    unsigned int *ramp_size_ptr, char *in_name);
+  int (*get_gamma_ramp)(struct win32gdi_data_t *,
+         unsigned int ramp_size,
+         uint16_t * r_ramp,
+         uint16_t * g_ramp,
+         uint16_t * b_ramp);
+  int (*apply)(struct win32gdi_data_t *,
+         unsigned int ramp_size,
+         const uint16_t * r_ramp,
+         const uint16_t * g_ramp,
+         const uint16_t * b_ramp);
+  int (*close)(struct win32gdi_data_t *);
+};
+
+int win32gdi_reset(struct win32gdi_data_t *data,
+    const char *displayname,
+    int screen,
+    int controller_unused);
+int win32gdi_init(struct win32gdi_data_t *, int donothing, int alter, int clear,
+        unsigned int *ramp_size_ptr, char *in_name);
+int win32gdi_get_gamma_ramp(struct win32gdi_data_t *,
+        unsigned int ramp_size,
+        uint16_t * r_ramp,
+        uint16_t * g_ramp,
+        uint16_t * b_ramp);
+int win32gdi_apply(struct win32gdi_data_t *,
+        unsigned int ramp_size,
+        const uint16_t * r_ramp,
+        const uint16_t * g_ramp,
+        const uint16_t * b_ramp);
+int win32gdi_close(struct win32gdi_data_t *);
+
+const static struct win32gdi_functions_t setup_functions = {
+  win32gdi_reset,
+  win32gdi_init,
+  win32gdi_get_gamma_ramp,
+  win32gdi_apply,
+  win32gdi_close
+};
+
+#endif
+
+#if (!defined(WIN32GDI)) && (defined(FGLRX)) && (!defined(XRANDR))
+/* fglrx on unix */
+
+struct fglrx_data_t {
+  Display *dpy;
+  const char *displayname;
+  int controller;
+  int screen;
+  XF86VidModeGamma gamma;
+  FGLRX_X11Gamma_C16native fglrx_gammaramps;
+};
+
+struct fglrx_functions_t {
+  int (*reset)(struct fglrx_data_t *data,
+          const char *displayname,
+      int screen,
+      int controller_unused);
+  int (*init)(struct fglrx_data_t *, int donothing, int alter, int clear,
+      unsigned int *ramp_size_ptr, char *in_name);
+  int (*get_gamma_ramp)(struct fglrx_data_t *,
+         unsigned int ramp_size,
+         uint16_t * r_ramp,
+         uint16_t * g_ramp,
+         uint16_t * b_ramp);
+  int (*apply)(struct fglrx_data_t *,
+         unsigned int ramp_size,
+         uint16_t * r_ramp,
+         uint16_t * g_ramp,
+         uint16_t * b_ramp);
+  int (*close)(struct fglrx_data_t *);
+};
+
+int fglrx_reset(struct fglrx_data_t * data,
+        const char *displayname,
+      int screen,
+      int controller_unused);
+int fglrx_init(struct fglrx_data_t *, int donothing, int alter, int clear,
+      unsigned int *ramp_size_ptr, char *in_name);
+int fglrx_get_gamma_ramp(struct fglrx_data_t *,
+         unsigned int ramp_size,
+         uint16_t * r_ramp,
+         uint16_t * g_ramp,
+         uint16_t * b_ramp);
+int fglrx_apply(struct fglrx_data_t *data,
+         unsigned int ramp_size,
+         uint16_t * r_ramp,
+         uint16_t * g_ramp,
+         uint16_t * b_ramp);
+int fglrx_close(struct fglrx_data_t *);
+  
+const static struct fglrx_functions_t setup_functions = {
+  fglrx_reset,
+  fglrx_init,
+  fglrx_get_gamma_ramp,
+  fglrx_apply,
+  fglrx_close
+};
+
+#endif
+
+
+#if (!defined(WIN32GDI)) && (!defined(FGLRX)) && (!defined(XRANDR))
+/* unix, xvidmode */
+
+struct xvidmode_data_t {
+  /* X11 */
+  XF86VidModeGamma gamma;
+  Display *dpy;
+  const char *displayname;
+  int screen;
+};
+
+struct xvidmode_functions_t {
+  int (*reset)(struct xvidmode_data_t * data,
+      const char *displayname,
+      int screen,
+      int controller_unused);
+  int (*init)(struct xvidmode_data_t *data, int donothing, int alter, int clear,
+      unsigned int *ramp_size_ptr, char *in_name);
+  int (*get_gamma_ramp)(struct xvidmode_data_t *data,
+          unsigned int ramp_size,
+          uint16_t * r_ramp,
+          uint16_t * g_ramp,
+          uint16_t * b_ramp);
+  int (*apply)(struct xvidmode_data_t *data,
+       unsigned int ramp_size,
+       uint16_t * r_ramp,
+       uint16_t * g_ramp,
+       uint16_t * b_ramp);
+  int (*close)(struct xvidmode_data_t *);
+};
+
+int xvidmode_reset(struct xvidmode_data_t* data,
+      const char *displayname,
+      int screen,
+      int controller_unused);
+int xvidmode_init(struct xvidmode_data_t *data, int donothing, int alter, int clear, 
+      unsigned int *ramp_size_ptr, char *in_name);
+int xvidmode_get_gamma_ramp(struct xvidmode_data_t *data,
+          unsigned int ramp_size,
+          uint16_t * r_ramp,
+          uint16_t * g_ramp,
+          uint16_t * b_ramp);
+int xvidmode_apply(struct xvidmode_data_t *data,
+       unsigned int ramp_size,
+       uint16_t * r_ramp,
+       uint16_t * g_ramp,
+       uint16_t * b_ramp);
+int xvidmode_close(struct xvidmode_data_t *data);
+
+static const struct xvidmode_functions_t setup_functions = {
+  xvidmode_reset,
+  xvidmode_init,
+  xvidmode_get_gamma_ramp,
+  xvidmode_apply,
+  xvidmode_close
+};
+
+#endif
+
+#if defined(XRANDR)
+/* X RandR setup on unix */
+
+#include "gamma_randr.h"
+
+struct xrandr_data_t {
+  randr_state_t state;
+};
+
+struct xrandr_functions_t {
+  int (*reset)(struct xrandr_data_t * data,
+      const char *displayname,
+      int screen,
+      int controller_unused);
+  int (*init)(struct xrandr_data_t *data, int donothing, int alter, int clear,
+      unsigned int *ramp_size_ptr, char *in_name);
+  int (*get_gamma_ramp)(struct xrandr_data_t *data,
+          unsigned int ramp_size,
+          uint16_t * r_ramp,
+          uint16_t * g_ramp,
+          uint16_t * b_ramp);
+  int (*apply)(struct xrandr_data_t *data,
+       unsigned int ramp_size,
+       uint16_t * r_ramp,
+       uint16_t * g_ramp,
+       uint16_t * b_ramp);
+  int (*close)(struct xrandr_data_t *);
+};
+
+int xrandr_reset(struct xrandr_data_t* data,
+      const char *displayname,
+      int screen,
+      int controller_unused);
+int xrandr_init(struct xrandr_data_t *data, int donothing, int alter, int clear, 
+      unsigned int *ramp_size_ptr, char *in_name);
+int xrandr_get_gamma_ramp(struct xrandr_data_t *data,
+          unsigned int ramp_size,
+          uint16_t * r_ramp,
+          uint16_t * g_ramp,
+          uint16_t * b_ramp);
+int xrandr_apply(struct xrandr_data_t *data,
+       unsigned int ramp_size,
+       uint16_t * r_ramp,
+       uint16_t * g_ramp,
+       uint16_t * b_ramp);
+int xrandr_close(struct xrandr_data_t *data);
+
+static const struct xrandr_functions_t setup_functions = {
+  xrandr_reset,
+  xrandr_init,
+  xrandr_get_gamma_ramp,
+  xrandr_apply,
+  xrandr_close
+};
+
+
 #endif
 
 /* prototypes */
@@ -147,7 +397,7 @@ usage (void)
   fprintf (stdout, "    -version\n");
   fprintf (stdout, "\n");
   fprintf (stdout,
-	   "last parameter must be an ICC profile containing a vcgt-tag\n");
+     "last parameter must be an ICC profile containing a vcgt-tag\n");
   fprintf (stdout, "\n");
 #ifndef WIN32GDI 
   fprintf (stdout, "Example: ./xcalib -d :0 -s 0 -v bluish.icc\n");
@@ -161,55 +411,10 @@ usage (void)
   exit (0);
 }
 
-#ifdef WIN32GDI
-/* Win32 monitor enumeration - code by gl.tter ( http://gl.tter.org ) */
-static unsigned int monitorSearchIndex = 0;
-static HDC monitorDC = 0;
 
-/*
- * FUNCTION MonitorEnumProc
- *
- * this is a Win32 callback function which is given as an argument
- * to EnumDisplayMonitors.
- *
- * returns
- * TRUE: if the current enumerated display is the wrong one
- * FALSE: if the right monitor was found and the DC was associated
- */
-BOOL CALLBACK MonitorEnumProc (HMONITOR monitor, HDC hdc, LPRECT rect, LPARAM data)
-{
-  MONITORINFOEX monitorInfo;
-  
-  if(monitorSearchIndex++ != (unsigned int)data)
-    return TRUE; /* continue enumeration */
-  
-  monitorInfo.cbSize = sizeof(monitorInfo);
-  if(GetMonitorInfo(monitor, (LPMONITORINFO)&monitorInfo) )
-    monitorDC = CreateDC(NULL, monitorInfo.szDevice, NULL, NULL);
-  
-  return FALSE;  /* stop enumeration */
-}
 
-/*
- * FUNCTION FindMonitor
- *
- * find a specific monitor given by index. Index -1 is the
- * primary display.
- *
- * returns the DC of the selected monitor
- */
-HDC FindMonitor(int index)
-{
-  if(index == -1)
-    return GetDC(NULL); /* return primary display context */
 
-  monitorSearchIndex = 0;
-  monitorDC = 0;
-  EnumDisplayMonitors(NULL, NULL, MonitorEnumProc, index);
-  return monitorDC;
-}
 
-#endif
 
 /*
  * FUNCTION read_vcgt_internal
@@ -224,7 +429,7 @@ HDC FindMonitor(int index)
  */
 int
 read_vcgt_internal(const char * filename, u_int16_t * rRamp, u_int16_t * gRamp,
-		       u_int16_t * bRamp, unsigned int nEntries)
+           u_int16_t * bRamp, unsigned int nEntries)
 {
   FILE * fp;
   unsigned int bytesRead;
@@ -418,7 +623,7 @@ read_vcgt_internal(const char * filename, u_int16_t * rRamp, u_int16_t * gRamp,
         redRamp = (unsigned short *) malloc ((numEntries+1) * sizeof (unsigned short));
         greenRamp = (unsigned short *) malloc ((numEntries+1) * sizeof (unsigned short));
         blueRamp = (unsigned short *) malloc ((numEntries+1) * sizeof (unsigned short));
-        {		  
+        {      
           for(j=0; j<numEntries; j++) {
             switch(entrySize) {
               case 1:
@@ -504,13 +709,13 @@ read_vcgt_internal(const char * filename, u_int16_t * rRamp, u_int16_t * gRamp,
 int
 main (int argc, char *argv[])
 {
-  int fa, nfa;			/* argument we're looking at */
+  int fa, nfa;      /* argument we're looking at */
   char in_name[256] = { '\000' };
   char tag_name[40] = { '\000' };
   int verb = 2;
   int search = 0;
-  int ecount = 1;		/* Embedded count */
-  int offset = 0;		/* Offset to read profile from */
+  int ecount = 1;    /* Embedded count */
+  int offset = 0;    /* Offset to read profile from */
   int found;
   int rv = 0;
   u_int16_t *r_ramp = NULL, *g_ramp = NULL, *b_ramp = NULL;
@@ -529,37 +734,30 @@ main (int argc, char *argv[])
   unsigned int ramp_size = 256;
   unsigned int ramp_scaling;
 
-#ifndef WIN32GDI
-  /* X11 */
-  XF86VidModeGamma gamma;
-  Display *dpy = NULL;
   char *displayname = NULL;
-#ifdef FGLRX
-  int controller = -1;
-  FGLRX_X11Gamma_C16native fglrx_gammaramps;
-#endif
-#else
-  char win_default_profile[MAX_PATH+1];
-  DWORD win_profile_len;
-  typedef struct _GAMMARAMP {
-    WORD  Red[256];
-    WORD  Green[256];
-    WORD  Blue[256];
-  } GAMMARAMP; 
-  GAMMARAMP winGammaRamp;
-  HDC hDc = NULL;
-#endif
 
-  xcalib_state.verbose = 0;
-
-  /* begin program part */
 #ifdef WIN32GDI
-  for(i=0; i< ramp_size; i++) {
-    winGammaRamp.Red[i] = i << 8;
-    winGammaRamp.Blue[i] = i << 8;
-    winGammaRamp.Green[i] = i << 8;
-  }
+  /* windows */
+  struct win32gdi_data_t setup_data;
 #endif
+
+#if (!defined(WIN32GDI)) && (defined(FGLRX))
+  /* fglrx on unix */
+  struct fglrx_data_t setup_data;
+#endif
+
+#if (!defined(WIN32GDI)) && (!defined(FGLRX)) && (!defined(XRANDR))
+  /* unix, xvidmode */
+  struct xvidmode_data_t setup_data;
+#endif
+
+#if defined(XRANDR)
+  /* X RandR setup on unix */
+  struct xrandr_data_t setup_data;
+#endif
+
+  /* for FGLRX only */
+  int controller_or_unused = -1;
 
   /* command line parsing */
   
@@ -605,7 +803,7 @@ main (int argc, char *argv[])
     if (!strcmp (argv[i], "-x") || !strcmp (argv[i], "-controller")) {
       if (++i >= argc)
         usage ();
-      controller = atoi (argv[i]);
+      controller_or_unused = atoi (argv[i]);
       continue;
     }
 #endif
@@ -809,84 +1007,14 @@ main (int argc, char *argv[])
     }
   }
 
-#ifdef WIN32GDI
-  if ((!clear || !alter) && (in_name[0] == '\0')) {
-    hDc = FindMonitor(screen);
-    win_profile_len = MAX_PATH;
-    win_default_profile[0] = '\0';
-    SetICMMode(hDc, ICM_ON);
-    if(GetICMProfileA(hDc, (LPDWORD) &win_profile_len, (LPSTR)win_default_profile))
-    {
-      if(strlen(win_default_profile) < 255)
-        strcpy (in_name, win_default_profile);
-      else
-        usage();
-    }
-    else
-      usage();
-  }
-#endif
 
-#ifndef WIN32GDI
-  /* X11 initializing */
-  if ((dpy = XOpenDisplay (displayname)) == NULL) {
-    if(!donothing)
-      error ("Can't open display %s", XDisplayName (displayname));
-    else
-      warning("Can't open display %s", XDisplayName (displayname));
-  }
-  else if (screen == -1)
-    screen = DefaultScreen (dpy);
+  setup_functions.reset(&setup_data, displayname, screen, controller_or_unused);
 
-  /* clean gamma table if option set */
-  gamma.red = 1.0;
-  gamma.green = 1.0;
-  gamma.blue = 1.0;
-  if (clear) {
-#ifndef FGLRX
-    if (!XF86VidModeSetGamma (dpy, screen, &gamma)) {
-#else
-    for(i = 0; i < 256; i++) {
-      fglrx_gammaramps.RGamma[i] = i << 2;
-      fglrx_gammaramps.GGamma[i] = i << 2;
-      fglrx_gammaramps.BGamma[i] = i << 2;
-    }
-    if (!FGLRX_X11SetGammaRamp_C16native_1024(dpy, screen, controller, 256, &fglrx_gammaramps)) {
-#endif
-      XCloseDisplay (dpy);
-      error ("Unable to reset display gamma");
-    }
+
+  if(setup_functions.init(&setup_data, donothing, alter, clear, &ramp_size, in_name))
+  {
     goto cleanupX;
   }
-  
-  /* get number of entries for gamma ramps */
-  if(!donothing)
-  {
-#ifndef FGLRX
-    if (!XF86VidModeGetGammaRampSize (dpy, screen, &ramp_size)) {
-#else
-    if (!FGLRX_X11GetGammaRampSize(dpy, screen, &ramp_size)) {
-#endif
-      XCloseDisplay (dpy);
-      if(!donothing)
-        error ("Unable to query gamma ramp size");
-      else {
-        warning ("Unable to query gamma ramp size - assuming 256");
-        ramp_size = 256;
-      }
-    }
-  }
-#else /* WIN32GDI */
-  if(!donothing) {
-    if(!hDc)
-      hDc = FindMonitor(screen);
-    if (clear) {
-      if (!SetDeviceGammaRamp(hDc, &winGammaRamp))
-        error ("Unable to reset display gamma");
-      goto cleanupX;
-    }
-  }
-#endif
 
   /* check for ramp size being a power of 2 and inside the supported range */
   switch(ramp_size)
@@ -926,19 +1054,7 @@ main (int argc, char *argv[])
       exit(0);
     }
   } else {
-#ifndef WIN32GDI
-    if (!XF86VidModeGetGammaRamp (dpy, screen, ramp_size, r_ramp, g_ramp, b_ramp))
-      warning ("Unable to get display calibration");
-#else
-    if (!GetDeviceGammaRamp(hDc, &winGammaRamp))
-      warning ("Unable to get display calibration");
-
-    for (i = 0; i < ramp_size; i++) {
-      r_ramp[i] = winGammaRamp.Red[i];
-      g_ramp[i] = winGammaRamp.Green[i];
-      b_ramp[i] = winGammaRamp.Blue[i];
-    }
-#endif
+    setup_functions.get_gamma_ramp(&setup_data, ramp_size, r_ramp, g_ramp, b_ramp);
   }
 
   {
@@ -1058,36 +1174,14 @@ main (int argc, char *argv[])
     }
     fprintf(stdout, "R: %d\tG: %d\t B: %d\t colors lost\n", ramp_size - r_res, ramp_size - g_res, ramp_size - b_res );
   }
-#ifdef WIN32GDI
-  for (i = 0; i < ramp_size; i++) {
-    winGammaRamp.Red[i] = r_ramp[i];
-    winGammaRamp.Green[i] = g_ramp[i];
-    winGammaRamp.Blue[i] = b_ramp[i];
-  }
 
-#endif
- 
+  
   if(printramps)
     for(i=0; i<ramp_size; i++)
       fprintf(stdout,"%x %x %x\n", r_ramp[i], g_ramp[i], b_ramp[i]);
 
   if(!donothing) {
-    /* write gamma ramp to X-server */
-#ifndef WIN32GDI
-# ifdef FGLRX
-    for(i = 0; i < ramp_size; i++) {
-      fglrx_gammaramps.RGamma[i] = r_ramp[i] >> 6;
-      fglrx_gammaramps.GGamma[i] = g_ramp[i] >> 6;
-      fglrx_gammaramps.BGamma[i] = b_ramp[i] >> 6;
-    }
-    if (!FGLRX_X11SetGammaRamp_C16native_1024(dpy, screen, controller, ramp_size, &fglrx_gammaramps))
-# else
-    if (!XF86VidModeSetGammaRamp (dpy, screen, ramp_size, r_ramp, g_ramp, b_ramp))
-# endif
-#else
-    if (!SetDeviceGammaRamp(hDc, &winGammaRamp))
-#endif
-      warning ("Unable to calibrate display");
+     setup_functions.apply(&setup_data, ramp_size, r_ramp, g_ramp, b_ramp);
   }
 
   message ("X-LUT size:      \t%d\n", ramp_size);
@@ -1097,14 +1191,494 @@ main (int argc, char *argv[])
   free(b_ramp);
 
 cleanupX:
-#ifndef WIN32GDI
-  if(dpy)
-    if(!donothing)
-      XCloseDisplay (dpy);
-#endif
+  if(!donothing)
+     setup_functions.close(&setup_data);
 
   return 0;
 }
+
+
+/* Implementation of setup methods */
+
+
+#if (!defined(WIN32GDI)) && (!defined(FGLRX)) && (!defined(XRANDR))
+  /* unix, xvidmode */
+
+/**
+  * Initialize the data structure used for xvidmode setup
+  */
+int xvidmode_reset(struct xvidmode_data_t *data,
+      const char *displayname,
+      int screen,
+      int controller_unused)
+{
+  data->dpy = NULL;
+    /* no copy needed, because string is not freed */
+  data->displayname = displayname; 
+  data->screen = screen;
+  (void)controller_unused; // silence compiler warning
+  return 0;
+}
+
+/**
+ * Initialize the xvidmode low-level stuff
+ * @return 0 on success, negative on error
+ */
+int xvidmode_init(struct xvidmode_data_t *data, int donothing, int alter_unused, 
+      int clear,
+      unsigned int *ramp_size_ptr, char *in_name_unused)
+{ 
+  int ramp_size;
+  (void) alter_unused; // silence compiler warning
+  (void) in_name_unused; // silence compiler warning
+  /* X11 initializing */
+  if ((data->dpy = XOpenDisplay (data->displayname)) == NULL) {
+    if(!donothing)
+      error ("Can't open display %s", XDisplayName (data->displayname));
+    else
+      warning("Can't open display %s", XDisplayName (data->displayname));
+  }
+  else if (data->screen == -1)
+    data->screen = DefaultScreen (data->dpy);
+
+  /* clean gamma table if option set */
+  data->gamma.red = 1.0;
+  data->gamma.green = 1.0;
+  data->gamma.blue = 1.0;
+  if (clear) {
+    if (!XF86VidModeSetGamma (data->dpy, data->screen, &(data->gamma))) {
+      XCloseDisplay (data->dpy);
+      error ("Unable to reset display gamma");
+    }
+    // goto cleanupX;
+    return -1;
+  }
+  
+  /* get number of entries for gamma ramps */
+  if(!donothing)
+  {
+    if (!XF86VidModeGetGammaRampSize (data->dpy, data->screen, &ramp_size)) {
+      XCloseDisplay (data->dpy);
+      if(!donothing)
+        error ("Unable to query gamma ramp size");
+      else {
+        warning ("Unable to query gamma ramp size - assuming 256");
+        ramp_size = 256;
+      }
+    }
+  }
+  *ramp_size_ptr = ramp_size;
+  return 0;
+}
+
+
+/**
+ * @return 0 on success, negative no error 
+ */
+int xvidmode_get_gamma_ramp(struct xvidmode_data_t *data,
+          unsigned int ramp_size,
+          uint16_t * r_ramp,
+          uint16_t * g_ramp,
+          uint16_t * b_ramp)
+{
+  if (!XF86VidModeGetGammaRamp (data->dpy, data->screen, ramp_size, r_ramp, g_ramp, b_ramp))
+  {
+      warning ("Unable to get display calibration");
+      return -1;
+  }
+  return 0;
+  
+}
+
+/**
+ * @return 0 on success, negative on error 
+ */
+int xvidmode_apply(struct xvidmode_data_t *data,
+       unsigned int ramp_size,
+       uint16_t * r_ramp,
+       uint16_t * g_ramp,
+       uint16_t * b_ramp)
+{
+  /* write gamma ramp to X-server */
+  if (!XF86VidModeSetGammaRamp (data->dpy, data->screen, ramp_size, r_ramp, g_ramp, b_ramp))
+  {
+    warning ("Unable to calibrate display");
+    return -1;
+  }
+  return 0;
+}      
+
+/**
+ * @return 0 on success, negative or error
+ */
+int xvidmode_close(struct xvidmode_data_t *data)
+{
+  if(data->dpy)
+    XCloseDisplay (data->dpy);
+  return 0;
+}
+
+#endif
+
+
+#if (!defined(WIN32GDI)) && (defined(FGLRX))
+/* fglrx on unix */
+
+int fglrx_reset(struct fglrx_data_t *data, const char *displayname, int screen, int controller) 
+{
+  data->displayname = displayname; /* not deleted afterwards, so can copy pointer */
+  data->dpy = NULL;
+  data->controller = controller;
+  data->screen = screen;
+}
+
+int fglrx_init(struct fglrx_data_t *data, int donothing, int alter_unused, int clear,
+      unsigned int *ramp_size_ptr, char *in_name_unused) 
+{
+  unsigned int ramp_size = 0;
+  int i;
+  (void) alter_unused;
+  (void) in_name_unused;
+  /* X11 initializing */
+  if ((data->dpy = XOpenDisplay (data->displayname)) == NULL) {
+    if(!donothing)
+      error ("Can't open display %s", XDisplayName (data->displayname));
+    else
+      warning("Can't open display %s", XDisplayName (data->displayname));
+  }
+  else if (data->screen == -1)
+    data->screen = DefaultScreen (data->dpy);
+
+  /* clean gamma table if option set */
+  data->gamma.red = 1.0;
+  data->gamma.green = 1.0;
+  data->gamma.blue = 1.0;
+  if (clear) {
+    for(i = 0; i < 256; i++) {
+      data->fglrx_gammaramps.RGamma[i] = i << 2;
+      data->fglrx_gammaramps.GGamma[i] = i << 2;
+      data->fglrx_gammaramps.BGamma[i] = i << 2;
+    }
+    if (!FGLRX_X11SetGammaRamp_C16native_1024(data->dpy, data->screen, data->controller, 
+    256, &(data->fglrx_gammaramps) )) {
+      XCloseDisplay (data->dpy);
+      error ("Unable to reset display gamma");
+    }
+    // goto cleanupX;
+    return -1; // TODO check return value at caller
+  }
+  
+  /* get number of entries for gamma ramps */
+  if(!donothing)
+  {
+    if (!FGLRX_X11GetGammaRampSize(data->dpy, data->screen, &ramp_size)) {
+      XCloseDisplay (data->dpy);
+      if(!donothing)
+        error ("Unable to query gamma ramp size");
+      else {
+        warning ("Unable to query gamma ramp size - assuming 256");
+        ramp_size = 256;
+      }
+    }
+  }
+  *ramp_size_ptr = ramp_size;
+  return 0;
+}
+
+int fglrx_get_gamma_ramp(struct fglrx_data_t *data,
+          unsigned int ramp_size,
+          uint16_t * r_ramp,
+          uint16_t * g_ramp,
+          uint16_t * b_ramp)
+{
+  if (!XF86VidModeGetGammaRamp (data->dpy, data->screen, ramp_size, r_ramp, g_ramp, b_ramp))
+  {
+      warning ("Unable to get display calibration");
+      return -1;
+  }
+  return 0;
+}
+
+int fglrx_apply(struct fglrx_data_t *data,
+       unsigned int ramp_size,
+       uint16_t * r_ramp,
+       uint16_t * g_ramp,
+       uint16_t * b_ramp)
+{
+  int i;
+  /* write gamma ramp to X-server */
+  for(i = 0; i < ramp_size; i++) {
+    data->fglrx_gammaramps.RGamma[i] = r_ramp[i] >> 6;
+    data->fglrx_gammaramps.GGamma[i] = g_ramp[i] >> 6;
+    data->fglrx_gammaramps.BGamma[i] = b_ramp[i] >> 6;
+  }
+  if (!FGLRX_X11SetGammaRamp_C16native_1024(data->dpy, data->screen, 
+      data->controller, ramp_size, &(data->fglrx_gammaramps)))
+  {
+    warning ("Unable to calibrate display");
+    return -1;
+  }
+  return 0;
+}
+
+int fglrx_close(struct fglrx_data_t *data)
+{
+  if(data->dpy)
+      XCloseDisplay (data->dpy);
+  return 0;
+}
+
+#endif
+
+
+#if defined(WIN32GDI)
+/* Windows */
+
+
+/* Win32 monitor enumeration - code by gl.tter ( http://gl.tter.org ) */
+static unsigned int monitorSearchIndex = 0;
+static HDC monitorDC = 0;
+
+/*
+ * FUNCTION MonitorEnumProc
+ *
+ * this is a Win32 callback function which is given as an argument
+ * to EnumDisplayMonitors.
+ *
+ * returns
+ * TRUE: if the current enumerated display is the wrong one
+ * FALSE: if the right monitor was found and the DC was associated
+ */
+BOOL CALLBACK MonitorEnumProc (HMONITOR monitor, HDC hdc, LPRECT rect, LPARAM data)
+{
+  MONITORINFOEX monitorInfo;
+  
+  if(monitorSearchIndex++ != (unsigned int)data)
+    return TRUE; /* continue enumeration */
+  
+  monitorInfo.cbSize = sizeof(monitorInfo);
+  if(GetMonitorInfo(monitor, (LPMONITORINFO)&monitorInfo) )
+    monitorDC = CreateDC(NULL, monitorInfo.szDevice, NULL, NULL);
+  
+  return FALSE;  /* stop enumeration */
+}
+
+/*
+ * FUNCTION FindMonitor
+ *
+ * find a specific monitor given by index. Index -1 is the
+ * primary display.
+ *
+ * returns the DC of the selected monitor
+ */
+HDC FindMonitor(int index)
+{
+  if(index == -1)
+    return GetDC(NULL); /* return primary display context */
+
+  monitorSearchIndex = 0;
+  monitorDC = 0;
+  EnumDisplayMonitors(NULL, NULL, MonitorEnumProc, index);
+  return monitorDC;
+}
+
+
+int win32gdi_reset(struct win32gdi_data_t *data,
+    const char *unused_displayname,
+    int screen,
+    int controller_unused)
+{
+  int i;
+
+  data->hDc = NULL;
+  data->screen = screen;
+  
+  for(i=0; i< ramp_size_win; i++) {
+    data->winGammaRamp.Red[i] = i << 8;
+    data->winGammaRamp.Blue[i] = i << 8;
+    data->winGammaRamp.Green[i] = i << 8;
+  }
+
+  return 0;
+}
+
+int win32gdi_init(struct win32gdi_data_t *data, int donothing, int alter, int clear,
+        unsigned int *ramp_size_ptr, char *in_name)
+{
+  *ramp_size_ptr = ramp_size_win; // apparently hardcoded in windows
+
+  if ((!clear || !alter) && (in_name[0] == '\0')) {
+    data->hDc = FindMonitor(data->screen);
+    data->win_profile_len = MAX_PATH;
+    data->win_default_profile[0] = '\0';
+    SetICMMode(data->hDc, ICM_ON);
+    if(GetICMProfileA(data->hDc, (LPDWORD) &(data->win_profile_len), (LPSTR)(data->win_default_profile)))
+    {
+      if(strlen(data->win_default_profile) < 255)
+        strcpy (in_name, data->win_default_profile);
+      else
+        usage();
+    }
+    else
+      usage();
+  }
+  if(!donothing) {
+    if(! data->hDc)
+      data->hDc = FindMonitor(data->screen);
+    if (clear) {
+      if (!SetDeviceGammaRamp(data->hDc, &(data->winGammaRamp))) {
+        error ("Unable to reset display gamma");
+        return -1;
+    }
+    }
+  }
+  return 0;
+}
+
+int win32gdi_get_gamma_ramp(struct win32gdi_data_t *data,
+        unsigned int ramp_size,
+        uint16_t * r_ramp,
+        uint16_t * g_ramp,
+        uint16_t * b_ramp)
+{
+  int i;
+  if (!GetDeviceGammaRamp(data->hDc, &(data->winGammaRamp)))
+    warning ("Unable to get display calibration");
+
+  for (i = 0; i < ramp_size; i++) {
+    r_ramp[i] = data->winGammaRamp.Red[i];
+    g_ramp[i] = data->winGammaRamp.Green[i];
+    b_ramp[i] = data->winGammaRamp.Blue[i];
+  }
+  return 0;
+}
+
+int win32gdi_apply(struct win32gdi_data_t *data,
+        unsigned int ramp_size,
+        const uint16_t * r_ramp,
+        const uint16_t * g_ramp,
+        const uint16_t * b_ramp)
+{
+  int i;
+  for (i = 0; i < ramp_size; i++) {
+    data->winGammaRamp.Red[i] = r_ramp[i];
+    data->winGammaRamp.Green[i] = g_ramp[i];
+    data->winGammaRamp.Blue[i] = b_ramp[i];
+  }
+  if (!SetDeviceGammaRamp(data->hDc, &(data->winGammaRamp)))
+  {
+    warning ("Unable to calibrate display");
+  return -1;
+  }
+  return 0;
+}
+
+int win32gdi_close(struct win32gdi_data_t *data)
+{
+  /* do nothing */
+  return 0;
+}
+
+#endif
+
+
+#if defined(XRANDR)
+  /* X RandR setup on unix */
+
+int xrandr_reset(struct xrandr_data_t* data,
+      const char *displayname_unused,
+      int screen,
+      int controller_unused)
+{
+  (void)displayname_unused;
+  (void)controller_unused;
+  /* TODO to set the X11 display for randr, the gamma_randr.c file has to be modified */
+  data->state.preferred_screen = screen;
+  /* TODO as controller, the preferred CRTC in randr could be used
+    to allow per-CRTC calibration */
+  data->state.crtc_num = -1;
+
+  return 0;
+}
+
+int xrandr_init(struct xrandr_data_t *data, int donothing, int alter, int clear, 
+      unsigned int *ramp_size_ptr, char *in_name_unused)
+{
+  (void)donothing;   // TODO "donothing" parameter not taken into account
+  (void)alter;
+  (void)clear;  // TODO "clear" parameter not taken into account
+  (void)in_name_unused;
+
+  if(randr_init(&(data->state)))
+    return -1;
+  if(randr_start(&(data->state)))
+    return -2;
+  if(data->state.crtc_count == 0){
+    warning("No CRTCs on screen");
+    return -3;
+  }
+  *ramp_size_ptr = data->state.crtcs[0].ramp_size;
+  return 0;
+}
+
+int xrandr_get_gamma_ramp(struct xrandr_data_t *data,
+          unsigned int ramp_size,
+          uint16_t * r_ramp,
+          uint16_t * g_ramp,
+          uint16_t * b_ramp)
+{
+  if(data->state.crtc_count < 1)
+  {
+    warning("No CRTCs on screen, cannot get gamma");
+    return -1;
+  }
+
+  int crtc_num = data->state.crtc_num;
+  if(crtc_num < 0)
+  {
+    crtc_num = 0; /* if all CRTCs are selected */
+  }
+  unsigned int saved_ramp_size = data->state.crtcs[crtc_num].ramp_size;
+  uint16_t *gamma_r = &data->state.crtcs[crtc_num].saved_ramps[0*saved_ramp_size];
+  uint16_t *gamma_g = &data->state.crtcs[crtc_num].saved_ramps[1*saved_ramp_size];
+  uint16_t *gamma_b = &data->state.crtcs[crtc_num].saved_ramps[2*saved_ramp_size];
+
+  if(saved_ramp_size != ramp_size)
+  {
+    warning("Screen's ramp size is different from the saved ramp size!");
+  }
+
+  unsigned int i;
+  for(i = 0; i < ramp_size; i++){
+    r_ramp[i] = gamma_r[i];
+    g_ramp[i] = gamma_g[i];
+    b_ramp[i] = gamma_b[i];
+  }
+
+  return 0;
+}
+
+int xrandr_apply(struct xrandr_data_t *data,
+       unsigned int ramp_size,
+       uint16_t * r_ramp,
+       uint16_t * g_ramp,
+       uint16_t * b_ramp)
+{
+  return randr_set_gamma(&(data->state), ramp_size, r_ramp, g_ramp, b_ramp);
+}
+
+int xrandr_close(struct xrandr_data_t *data)
+{
+  randr_free(&(data->state));
+  return 0;
+}
+
+
+#endif
+
+  
+
+
 
 /* Basic printf type error() and warning() routines */
 
@@ -1121,6 +1695,7 @@ error (char *fmt, ...)
   fprintf (stderr, "\n");
   exit (-1);
 }
+
 
 /* warnings are printed to stdout */
 void
